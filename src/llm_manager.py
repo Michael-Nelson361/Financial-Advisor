@@ -26,7 +26,7 @@ class LLMManager:
         try:
             # List available models
             models = self.client.list()
-            available_models = [model['name'] for model in models['models']]
+            available_models = [model.model for model in models.models]
             
             if self.model_name not in available_models:
                 logger.info(f"Model {self.model_name} not found. Attempting to pull...")
