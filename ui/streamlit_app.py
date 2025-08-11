@@ -209,6 +209,10 @@ def render_sidebar():
             st.session_state.chat_interface.clear_session()
         st.sidebar.success("All data cleared!")
         st.rerun()
+    
+    # Debug button
+    if st.sidebar.button("🔧 System Diagnostics"):
+        st.session_state.show_diagnostics = not st.session_state.get('show_diagnostics', False)
 
 def render_main_interface():
     """Render the main chat interface."""
@@ -261,6 +265,10 @@ def render_main_interface():
     # Suggested questions
     if not st.session_state.chat_history:
         render_suggested_questions()
+    
+    # Show diagnostics if requested
+    if st.session_state.get('show_diagnostics', False):
+        render_diagnostics()
 
 def render_chat_message(message):
     """Render a single chat message."""
@@ -318,6 +326,48 @@ def render_suggested_questions():
             with cols[i % 2]:
                 if st.button(question, key=f"suggestion_{i}"):
                     process_chat_message(question)
+
+def render_diagnostics():
+    """Render system diagnostics"""
+    st.markdown("## 🔧 System Diagnostics")
+    
+    # Check vector store status
+    if hasattr(st.session_state, 'vector_store') and st.session_state.vector_store:
+        vs = st.session_state.vector_store
+        
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Documents", len(vs.documents))
+        with col2:
+            st.metric("Chunks", len(vs.chunk_metadata))
+        with col3:
+            st.metric("Transactions", len([c for c in vs.chunk_metadata if c.get('chunk_type') == 'transaction']))
+        
+        if len(vs.documents) > 0:
+            st.markdown("### 📄 Loaded Documents")
+            for i, doc in enumerate(vs.documents):
+                with st.expander(f"Document {i+1}: {doc['filename']}"):
+                    st.write(f"**Type:** {doc.get('document_type', 'unknown')}")
+                    st.write(f"**Transactions:** {len(doc.get('transactions', []))}")
+                    st.write(f"**Text length:** {len(doc.get('full_text', ''))} characters")
+                    
+                    if doc.get('transactions'):
+                        st.write("**Sample transactions:**")
+                        for txn in doc['transactions'][:5]:
+                            st.write(f"- {txn['date'][:10]}: {txn['description']} ${txn['amount']}")
+        
+        # Test search functionality
+        st.markdown("### 🔍 Test Search")
+        test_query = st.text_input("Test search query:", "subscription")
+        if test_query:
+            results = vs.search(test_query, k=3)
+            st.write(f"Found {len(results)} results:")
+            for i, result in enumerate(results):
+                st.write(f"**Result {i+1}** (score: {result['similarity_score']:.3f})")
+                st.write(result['text'][:200] + "...")
+    
+    else:
+        st.error("Vector store not initialized")
 
 def process_chat_message(user_input):
     """Process user chat message and generate response."""

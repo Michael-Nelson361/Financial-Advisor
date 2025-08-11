@@ -99,14 +99,17 @@ class DocumentProcessor:
         """Extract transaction information from document text."""
         transactions = []
         
-        # Common transaction patterns
+        # Common transaction patterns - improved to avoid duplicates
         patterns = [
-            # Date, Description, Amount patterns
-            r'(\d{1,2}/\d{1,2}/\d{2,4})\s+([A-Za-z].*?)\s+([-$]?\d+\.\d{2})',
-            r'(\d{1,2}-\d{1,2}-\d{2,4})\s+([A-Za-z].*?)\s+([-$]?\d+\.\d{2})',
-            # More flexible patterns
-            r'(\d{1,2}/\d{1,2}/\d{2,4}).*?([A-Z][A-Za-z\s]+)\s+([-$]?\d+\.\d{2})',
+            # Date, Description, Amount patterns (most specific first)
+            r'(\d{1,2}/\d{1,2}/\d{2,4})\s+([A-Za-z][A-Za-z\s\.]+?[A-Za-z])\s+([-$]?\d+\.\d{2})',
+            r'(\d{1,2}-\d{1,2}-\d{2,4})\s+([A-Za-z][A-Za-z\s\.]+?[A-Za-z])\s+([-$]?\d+\.\d{2})',
+            # More flexible patterns for different formats
+            r'(\d{1,2}/\d{1,2}/\d{2,4})\s+([A-Z][A-Z\s]+)\s+([-+$]?\d+\.\d{2})',
         ]
+        
+        # Track processed transactions to avoid duplicates
+        processed_transactions = set()
         
         for pattern in patterns:
             matches = re.findall(pattern, text, re.MULTILINE)
@@ -114,29 +117,33 @@ class DocumentProcessor:
                 date_str, description, amount_str = match
                 
                 try:
-                    # Clean up amount string
-                    amount_str = amount_str.replace('$', '').replace(',', '')
+                    # Clean up description and amount
+                    description = description.strip()
+                    amount_str = amount_str.replace('$', '').replace(',', '').replace('+', '')
                     amount = float(amount_str)
                     
                     # Parse date
-                    try:
-                        if '/' in date_str:
-                            date_obj = datetime.strptime(date_str, '%m/%d/%Y')
-                        else:
-                            date_obj = datetime.strptime(date_str, '%m-%d-%Y')
-                    except ValueError:
-                        # Try with 2-digit year
+                    date_obj = None
+                    for date_format in ['%m/%d/%Y', '%m-%d-%Y', '%m/%d/%y', '%m-%d-%y']:
                         try:
-                            if '/' in date_str:
-                                date_obj = datetime.strptime(date_str, '%m/%d/%y')
-                            else:
-                                date_obj = datetime.strptime(date_str, '%m-%d-%y')
+                            date_obj = datetime.strptime(date_str, date_format)
+                            break
                         except ValueError:
-                            continue  # Skip if date parsing fails
+                            continue
+                    
+                    if date_obj is None:
+                        continue  # Skip if date parsing fails
+                    
+                    # Create unique key to avoid duplicates
+                    transaction_key = (date_obj.date(), description, amount)
+                    if transaction_key in processed_transactions:
+                        continue
+                    
+                    processed_transactions.add(transaction_key)
                     
                     transaction = {
                         'date': date_obj.isoformat(),
-                        'description': description.strip(),
+                        'description': description,
                         'amount': amount,
                         'type': 'debit' if amount < 0 else 'credit'
                     }
@@ -146,18 +153,10 @@ class DocumentProcessor:
                 except (ValueError, TypeError):
                     continue  # Skip invalid transactions
         
-        # Remove duplicates and sort by date
-        seen = set()
-        unique_transactions = []
-        for transaction in transactions:
-            key = (transaction['date'], transaction['description'], transaction['amount'])
-            if key not in seen:
-                seen.add(key)
-                unique_transactions.append(transaction)
+        # Sort by date (duplicates already removed)
+        transactions.sort(key=lambda x: x['date'], reverse=True)
         
-        unique_transactions.sort(key=lambda x: x['date'], reverse=True)
-        
-        return unique_transactions[:100]  # Limit to most recent 100 transactions
+        return transactions[:100]  # Limit to most recent 100 transactions
     
     def get_document_summary(self, documents: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Generate a summary of processed documents."""
