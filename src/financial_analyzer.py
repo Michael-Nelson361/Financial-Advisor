@@ -169,7 +169,7 @@ class FinancialAnalyzer:
         for description in df['description'].unique():
             desc_transactions = df[df['description'] == description]
             
-            if len(desc_transactions) >= 3:  # At least 3 occurrences
+            if len(desc_transactions) >= 2:  # At least 2 occurrences for subscriptions
                 amounts = desc_transactions['amount'].unique()
                 
                 # Check if amounts are consistent (same or very similar)
@@ -182,9 +182,16 @@ class FinancialAnalyzer:
                         interval = (dates[i] - dates[i-1]).days
                         intervals.append(interval)
                     
-                    # Check for regular intervals (monthly, weekly, etc.)
-                    if intervals and (25 <= np.mean(intervals) <= 35 or  # Monthly
-                                      6 <= np.mean(intervals) <= 8):     # Weekly
+                    # Check for regular intervals (monthly, weekly, yearly, etc.)
+                    avg_interval = np.mean(intervals) if intervals else 0
+                    if intervals and (
+                        25 <= avg_interval <= 35 or   # Monthly (28-31 days)
+                        6 <= avg_interval <= 8 or     # Weekly
+                        85 <= avg_interval <= 95 or   # Quarterly (~90 days)
+                        360 <= avg_interval <= 370 or # Yearly (~365 days)
+                        (len(desc_transactions) >= 2 and any(keyword in description.lower() 
+                         for keyword in ['subscription', 'recurring', 'monthly', 'annual', 'netflix', 'spotify', 'prime', 'gym']))
+                    ):
                         
                         recurring.append({
                             'description': description,

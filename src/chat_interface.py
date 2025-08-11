@@ -23,7 +23,7 @@ class ChatInterface:
             
             # Get relevant context if requested
             context_data = []
-            if search_context and query_type != 'general':
+            if search_context and len(self.vector_store.chunk_metadata) > 0:
                 context_data = self.vector_store.search(user_message, k=5)
             
             # Handle different types of queries
@@ -65,7 +65,7 @@ class ChatInterface:
         
         # Transaction search keywords
         if any(keyword in message_lower for keyword in [
-            'transaction', 'payment', 'charge', 'find', 'search', 'when did', 'show me'
+            'transaction', 'payment', 'charge', 'find', 'search', 'when did', 'show me', 'recurring', 'subscription', 'subscriptions', 'recurring payments', 'monthly payments'
         ]):
             return 'transaction_search'
         
